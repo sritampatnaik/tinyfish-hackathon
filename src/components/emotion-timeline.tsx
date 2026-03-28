@@ -25,7 +25,7 @@ export function EmotionTimeline({
 }: EmotionTimelineProps) {
   if (segments.length === 0) {
     return (
-      <section className="rounded-4xl border border-black/8 bg-white p-6">
+      <section className="border border-black bg-white p-6">
         <div className="space-y-2">
           <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">{title}</p>
           <h3 className="text-2xl text-[#111111]">{subtitle}</h3>
@@ -39,7 +39,7 @@ export function EmotionTimeline({
   }
 
   return (
-    <section className="rounded-4xl border border-black/8 bg-white p-6">
+    <section className="border border-black bg-white p-6">
       <div className="mb-6 space-y-2">
         <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">{title}</p>
         <h3 className="text-2xl text-[#111111]">{subtitle}</h3>
@@ -51,7 +51,7 @@ export function EmotionTimeline({
           return (
             <article
               key={segment.id}
-              className="rounded-3xl border border-black/8 bg-[#fafaf8] p-4"
+              className="border border-black bg-white p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="space-y-2">
@@ -66,14 +66,14 @@ export function EmotionTimeline({
                   </div>
                   <p className="text-lg leading-7 text-[#111111]">{segment.label}</p>
                 </div>
-                <div className="rounded-full border border-[#f0c28b] bg-[#fff7ee] px-3 py-1 text-sm text-[#8f5b1d]">
+                <div className="border border-black bg-black px-3 py-1 text-sm text-white">
                   {leadEmotion.name} {formatPercent(leadEmotion.score)}
                 </div>
               </div>
 
-              <div className="mt-4 h-2 rounded-full bg-black/8">
+              <div className="mt-4 h-2 bg-black/8">
                 <div
-                  className="h-full rounded-full bg-[linear-gradient(90deg,#f8b86f_0%,#e15770_100%)]"
+                  className="h-full bg-[linear-gradient(90deg,#f8b86f_0%,#e15770_100%)]"
                   style={{ width: `${Math.max(leadEmotion.score * 100, 6)}%` }}
                 />
               </div>
@@ -82,7 +82,7 @@ export function EmotionTimeline({
                 {segment.topEmotions.map((emotion) => (
                   <span
                     key={`${segment.id}-${emotion.name}`}
-                    className="rounded-full border border-black/8 px-3 py-1 text-sm text-black/62"
+                    className="border border-black px-3 py-1 text-sm text-black/62"
                   >
                     {emotion.name} {formatPercent(emotion.score)}
                   </span>

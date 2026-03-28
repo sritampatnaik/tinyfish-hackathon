@@ -17,7 +17,7 @@ const MARKET_TARGETS: Array<{ site: MarketSite; url: string }> = [
 ];
 
 const TINYFISH_POLL_INTERVAL_MS = 5000;
-const TINYFISH_RUN_TIMEOUT_MS = 3 * 60 * 1000;
+const TINYFISH_RUN_TIMEOUT_MS = 8 * 60 * 1000;
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -111,6 +111,7 @@ Return JSON in exactly this shape:
   "markets": [
     {
       "bet_name": "string",
+      "market_url": "string | null",
       "outcomes": [
         { "name": "string", "price": "string | number | null" }
       ]
@@ -143,6 +144,12 @@ function normalizeMarkets(payload: unknown) {
     const marketRecord = asRecord(market);
     const betName = asString(
       marketRecord?.bet_name ?? marketRecord?.betName ?? marketRecord?.name,
+    );
+    const marketUrl = asString(
+      marketRecord?.market_url ??
+        marketRecord?.marketUrl ??
+        marketRecord?.url ??
+        marketRecord?.href,
     );
 
     if (!betName) {
@@ -183,6 +190,7 @@ function normalizeMarkets(payload: unknown) {
 
     const extractedMarket: ExtractedMarket = {
       betName,
+      marketUrl,
       outcomes,
     };
 
@@ -466,21 +474,17 @@ async function streamSingleMarketExtraction(
 }
 
 export async function extractUsIranMarkets() {
-  const client = getTinyFishClient();
-
   return Promise.all(
-    MARKET_TARGETS.map((target) => runSingleMarketExtraction(client, target)),
+    MARKET_TARGETS.map((target) => runSingleMarketExtraction(getTinyFishClient(), target)),
   );
 }
 
 export async function extractUsIranMarketsWithStream(
   emit: (card: ObserveAgentCard) => Promise<void> | void,
 ) {
-  const client = getTinyFishClient();
-
   return Promise.all(
     MARKET_TARGETS.map((target) =>
-      streamSingleMarketExtraction(client, target, emit),
+      streamSingleMarketExtraction(getTinyFishClient(), target, emit),
     ),
   );
 }

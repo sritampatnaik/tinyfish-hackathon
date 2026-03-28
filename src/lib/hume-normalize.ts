@@ -181,6 +181,8 @@ function normalizeProsodySegments(payload: unknown) {
         id: `prosody-${speakerId}-${index}`,
         label,
         rangeLabel,
+        startSeconds: begin ?? undefined,
+        endSeconds: end ?? undefined,
         transcript: label,
         speakerId,
         topEmotions,
@@ -239,6 +241,7 @@ function normalizeFaceMoments(payload: unknown) {
         faceId,
         timeLabel:
           time !== null ? formatSeconds(time) : `Frame ${index + 1}`,
+        timeSeconds: time ?? undefined,
         topEmotions,
         topDescriptions: getTopEmotions(
           pick(predictionRecord, "descriptions"),

@@ -1,8 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import { useMemo, useState } from "react";
 
+import { HumeVideoOverlay } from "@/components/hume-video-overlay";
 import { MarketResults } from "@/components/market-results";
 import { RecommendationCard } from "@/components/recommendation-card";
 import { ResultsDashboard } from "@/components/results-dashboard";
@@ -15,7 +15,6 @@ import type {
   MarketObservationResult,
   ObserveAgentCard,
   ObserveStreamEvent,
-  SampleVideo,
 } from "@/lib/types";
 
 type PollingResponse = {
@@ -45,6 +44,7 @@ const HUME_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 const HUME_MAX_POLL_ATTEMPTS = Math.ceil(HUME_POLL_TIMEOUT_MS / HUME_POLL_INTERVAL_MS);
 
 type StepState = "idle" | "ready" | "running" | "complete" | "error" | "blocked";
+type TabId = "watch" | "act" | "think";
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -52,6 +52,9 @@ function wait(milliseconds: number) {
 
 export function VideoAnalyzerApp() {
   const [selectedSampleId, setSelectedSampleId] = useState(sampleVideos[0]?.id ?? "");
+  const [activeTab, setActiveTab] = useState<TabId>("watch");
+  const [videoCurrentTime, setVideoCurrentTime] = useState(0);
+  const [videoDuration, setVideoDuration] = useState(0);
   const [watchStatus, setWatchStatus] = useState("Waiting to watch");
   const [actStatus, setActStatus] = useState("Waiting for watch");
   const [thinkStatus, setThinkStatus] = useState("Waiting for act");
@@ -75,15 +78,6 @@ export function VideoAnalyzerApp() {
     [selectedSampleId],
   );
 
-  const totalObservedMarkets = useMemo(
-    () =>
-      observationResult?.markets.reduce(
-        (total, siteResult) => total + siteResult.markets.length,
-        0,
-      ) ?? 0,
-    [observationResult],
-  );
-
   const observedBetPreview = useMemo(
     () =>
       observationResult?.markets.flatMap((siteResult) =>
@@ -98,8 +92,6 @@ export function VideoAnalyzerApp() {
   const topObservedBets = observedBetPreview.slice(0, 3);
   const canAct = Boolean(humeResult);
   const canThink = Boolean(humeResult && observationResult);
-  const shouldShowObserveAgents =
-    isActing && humeResult !== null && observationResult === null;
 
   const watchState: StepState = isWatching
     ? "running"
@@ -250,6 +242,7 @@ export function VideoAnalyzerApp() {
       }
 
       setActStatus("Ready for TinyFish");
+      setActiveTab("watch");
     } catch (error) {
       setWatchError(
         error instanceof Error ? error.message : "Unexpected analysis failure.",
@@ -296,6 +289,7 @@ export function VideoAnalyzerApp() {
         `Act complete. ${successfulSites}/${observePayload.result.markets.length} sites responded.`,
       );
       setThinkStatus("Ready for OpenAI analysis");
+      setActiveTab("act");
     } catch (error) {
       setActError(
         error instanceof Error ? error.message : "Unexpected TinyFish failure.",
@@ -337,6 +331,7 @@ export function VideoAnalyzerApp() {
 
       setIntelligenceResult(payload.result);
       setThinkStatus("Think complete");
+      setActiveTab("think");
     } catch (error) {
       setThinkError(
         error instanceof Error ? error.message : "Unexpected market failure.",
@@ -351,58 +346,73 @@ export function VideoAnalyzerApp() {
     return null;
   }
 
+  const handleSampleChange = (sampleId: string) => {
+    setSelectedSampleId(sampleId);
+    setActiveTab("watch");
+    setVideoCurrentTime(0);
+    setVideoDuration(0);
+    setWatchStatus("Waiting to watch");
+    setActStatus("Waiting for watch");
+    setThinkStatus("Waiting for act");
+    setWatchError(null);
+    setActError(null);
+    setThinkError(null);
+    setHumeResult(null);
+    setObservationResult(null);
+    setIntelligenceResult(null);
+    setObserveAgents([]);
+  };
+
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-8 bg-[#f6f1e8] px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
-      <section className="rounded-[2.4rem] border border-black/8 bg-white px-6 py-6 shadow-[0_18px_60px_rgba(17,17,17,0.05)] sm:px-8 sm:py-8">
-        <div className="grid gap-8 xl:grid-cols-[0.98fr_1.12fr]">
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <p className="text-xs uppercase tracking-[0.38em] text-[#b46d24]">
-                TinyFish Trading Console
-              </p>
-              <h1 className="max-w-3xl text-4xl leading-none text-[#111111] sm:text-5xl">
-                Watch first. Act second. Think when the signals are in.
-              </h1>
-              <p className="max-w-2xl text-base leading-7 text-black/56">
-                A lighter workflow that reveals details only when they become useful.
-              </p>
-            </div>
+    <main className="flex w-full flex-1 flex-col gap-6 bg-[#f3efe7] px-5 py-6 sm:px-8 lg:px-10 lg:py-8">
+      <section className="border border-black bg-white">
+        <div className="grid gap-6 border-b border-black px-5 py-6 lg:grid-cols-[1.25fr_0.75fr] lg:px-8">
+          <div className="space-y-4">
+            <h1 className="max-w-4xl text-4xl leading-none text-black sm:text-5xl">
+              TinyAlpha
+            </h1>
+            <p className="max-w-2xl text-base leading-7 text-black/62">
+              Watch the signal. Act on the markets. Think before opening a trade.
+            </p>
+          </div>
+        </div>
 
-            <div className="flex flex-wrap gap-2">
-              <StepBadge label="Watch" state={watchState} />
-              <StepBadge label="Act" state={actState} />
-              <StepBadge label="Think" state={thinkState} />
-            </div>
-
-            <div className="rounded-4xl border border-black/8 bg-[#faf7f2] p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="grid gap-6 px-5 py-6 lg:grid-cols-[0.78fr_1.22fr] lg:px-8">
+          <aside className="space-y-6">
+            <div className="border border-black p-4">
+              <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.32em] text-[#b46d24]">
+                  <p className="text-xs uppercase tracking-[0.28em] text-black/45">
                     Selected clip
                   </p>
-                  <h2 className="mt-2 text-3xl text-[#111111]">{selectedSample.title}</h2>
-                  <p className="mt-3 max-w-xl text-sm leading-6 text-black/58">
+                  <h2 className="mt-2 text-2xl text-black">{selectedSample.title}</h2>
+                  <p className="mt-3 text-sm leading-6 text-black/62">
                     {selectedSample.description}
                   </p>
                 </div>
-                <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-sm text-black/56">
+                <span className="border border-black px-3 py-1 text-sm text-black/62">
                   {selectedSample.durationLabel}
                 </span>
               </div>
 
+              <div className="mt-4 flex flex-wrap gap-2 text-sm text-black/52">
+                <span>{selectedSample.speaker}</span>
+                <span>{selectedSample.context}</span>
+              </div>
+
               {sampleVideos.length > 1 ? (
-                <div className="mt-4 flex flex-wrap gap-2">
+                <div className="mt-5 flex flex-wrap gap-2">
                   {sampleVideos.map((sample) => {
                     const isSelected = sample.id === selectedSample.id;
                     return (
                       <button
                         key={sample.id}
                         type="button"
-                        onClick={() => setSelectedSampleId(sample.id)}
-                        className={`rounded-full border px-4 py-2 text-sm transition ${
+                        onClick={() => handleSampleChange(sample.id)}
+                        className={`border px-4 py-2 text-sm uppercase tracking-[0.14em] transition ${
                           isSelected
-                            ? "border-[#dca15f] bg-[#fff3e2] text-[#8b5619]"
-                            : "border-black/10 bg-white text-black/60 hover:border-black/18"
+                            ? "border-black bg-black text-white"
+                            : "border-black bg-white text-black hover:bg-black hover:text-white"
                         }`}
                       >
                         {sample.title}
@@ -413,167 +423,199 @@ export function VideoAnalyzerApp() {
               ) : null}
             </div>
 
-            <ActionPanel
-              eyebrow="Watch"
-              title="Hume analysis"
-              description="Watch only runs Hume and prepares the emotional context for the next step."
-              footer={watchStatus}
-              action={
-                <button
-                  type="button"
-                  onClick={handleWatch}
-                  disabled={isWatching}
-                  className="inline-flex items-center justify-center rounded-full bg-[#111111] px-5 py-3 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isWatching ? "Watching..." : "Run Watch"}
-                </button>
-              }
-            >
-              {watchError ? <ErrorPanel message={watchError} /> : null}
-            </ActionPanel>
+            <div className="space-y-0 border border-black">
+              <TabButton
+                label="Tab 1"
+                title="Watch"
+                state={watchState}
+                isActive={activeTab === "watch"}
+                onClick={() => setActiveTab("watch")}
+              />
+              <TabButton
+                label="Tab 2"
+                title="Act"
+                state={actState}
+                isActive={activeTab === "act"}
+                onClick={() => setActiveTab("act")}
+              />
+              <TabButton
+                label="Tab 3"
+                title="Think"
+                state={thinkState}
+                isActive={activeTab === "think"}
+                onClick={() => setActiveTab("think")}
+              />
+            </div>
 
-            {(canAct || observationResult || isActing || actError) && (
-              <ActionPanel
-                eyebrow="Act"
-                title="TinyFish market action"
-                description="Act uses TinyFish to inspect Kalshi and Polymarket and collect the bets."
-                footer={actStatus}
-                action={
-                  <button
-                    type="button"
-                    onClick={handleAct}
-                    disabled={!canAct || isActing}
-                    className="inline-flex items-center justify-center rounded-full border border-black/12 bg-white px-5 py-3 text-sm font-medium text-[#111111] transition hover:border-black/22 hover:bg-black/2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isActing ? "Acting..." : "Run Act"}
-                  </button>
-                }
-              >
+            <div className="border border-black bg-white p-4">
+              <p className="text-xs uppercase tracking-[0.28em] text-black/45">
+                Now in focus
+              </p>
+              <p className="mt-3 text-2xl text-black">
+                {activeTab === "watch"
+                  ? "Video and Hume"
+                  : activeTab === "act"
+                    ? "TinyFish live markets"
+                    : "OpenAI recommendation"}
+              </p>
+              <p className="mt-3 text-sm leading-6 text-black/62">{activeStepLabel}</p>
+            </div>
+          </aside>
+
+          <div className="space-y-5">
+            {activeTab === "watch" ? (
+              <>
+                <TabToolbar
+                  eyebrow="Tab 1"
+                  title="Watch"
+                  description="Run Hume, inspect the video, and read the transcript with emotional timing."
+                  status={watchStatus}
+                  actionLabel={isWatching ? "Watching..." : "Run Watch"}
+                  onAction={handleWatch}
+                  disabled={isWatching}
+                  secondaryActionLabel="Next"
+                  onSecondaryAction={() => setActiveTab("act")}
+                  secondaryDisabled={!humeResult}
+                />
+
+                {watchError ? <ErrorPanel message={watchError} /> : null}
+
+                <section className="border border-black bg-white">
+                  <div className="relative aspect-video border-b border-black bg-[#ede7dd]">
+                    <video
+                      key={selectedSample.videoSrc}
+                      className="h-full w-full object-cover"
+                      controls
+                      poster={selectedSample.posterSrc}
+                      preload="metadata"
+                      onLoadedMetadata={(event) => {
+                        setVideoDuration(event.currentTarget.duration || 0);
+                        setVideoCurrentTime(event.currentTarget.currentTime || 0);
+                      }}
+                      onTimeUpdate={(event) => {
+                        setVideoCurrentTime(event.currentTarget.currentTime || 0);
+                      }}
+                      onSeeked={(event) => {
+                        setVideoCurrentTime(event.currentTarget.currentTime || 0);
+                      }}
+                    >
+                      <source src={selectedSample.videoSrc} type="video/mp4" />
+                    </video>
+                    {humeResult ? (
+                      <HumeVideoOverlay
+                        result={humeResult}
+                        currentTime={videoCurrentTime}
+                        duration={videoDuration}
+                      />
+                    ) : null}
+                  </div>
+                  <div className="grid gap-px bg-black sm:grid-cols-3">
+                    <MetricTile label="Speech" value={`${humeResult?.summary.totalSpeechMoments ?? 0}`} />
+                    <MetricTile
+                      label="Language"
+                      value={`${humeResult?.summary.totalLanguageMoments ?? 0}`}
+                    />
+                    <MetricTile label="Faces" value={`${humeResult?.summary.trackedFaces ?? 0}`} />
+                  </div>
+                </section>
+
+                {humeResult ? (
+                  <ResultsDashboard result={humeResult} />
+                ) : (
+                  <PlaceholderPanel
+                    title="Run Watch to unlock Hume"
+                    description="This tab will show the video, transcript, timelines, and face signals once the Hume analysis is complete."
+                  />
+                )}
+              </>
+            ) : null}
+
+            {activeTab === "act" ? (
+              <>
+                <TabToolbar
+                  eyebrow="Tab 2"
+                  title="Act"
+                  description="Trigger TinyFish, watch both browser agents live, and compare Kalshi versus Polymarket output."
+                  status={actStatus}
+                  actionLabel={isActing ? "Running TinyFish..." : "Run TinyFish"}
+                  onAction={handleAct}
+                  disabled={!canAct || isActing}
+                  secondaryActionLabel="Next"
+                  onSecondaryAction={() => setActiveTab("think")}
+                  secondaryDisabled={!observationResult && observeAgents.length === 0}
+                />
+
                 {actError ? <ErrorPanel message={actError} /> : null}
-                {shouldShowObserveAgents ? (
-                  <div className="grid gap-3 sm:grid-cols-2">
+
+                {observeAgents.length > 0 ? (
+                  <div className="space-y-4">
                     {observeAgents.map((card) => (
                       <ObserveAgentStreamCard key={card.site} card={card} />
                     ))}
                   </div>
-                ) : null}
+                ) : (
+                  <PlaceholderPanel
+                    title="Run TinyFish from this tab"
+                    description="The live browser sessions for Kalshi and Polymarket will appear here at near-video scale while TinyFish explores the markets."
+                  />
+                )}
+
                 {topObservedBets.length > 0 ? (
-                  <details className="rounded-3xl border border-black/8 bg-[#faf7f2] px-4 py-3">
-                    <summary className="cursor-pointer list-none text-sm font-medium text-[#111111]">
-                      Acted bets ({totalObservedMarkets})
-                    </summary>
+                  <section className="border border-black bg-white p-4">
+                    <p className="text-xs uppercase tracking-[0.28em] text-black/45">
+                      Fast read
+                    </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {topObservedBets.map((bet) => (
                         <span
                           key={`${bet.site}-${bet.betName}`}
-                          className="rounded-full border border-black/10 bg-white px-3 py-1 text-xs uppercase tracking-[0.14em] text-black/62"
+                          className="border border-black px-3 py-2 text-xs uppercase tracking-[0.14em] text-black"
                         >
                           {bet.site} · {bet.betName}
                         </span>
                       ))}
                     </div>
-                  </details>
+                  </section>
                 ) : null}
-              </ActionPanel>
-            )}
 
-            {(canThink || intelligenceResult || isThinking || thinkError) ? (
-              <ActionPanel
-                eyebrow="Think"
-                title="OpenAI recommendation"
-                description="Think compares the Hume watch context against the TinyFish act output."
-                footer={thinkStatus}
-                action={
-                  <button
-                    type="button"
-                    onClick={handleThink}
-                    disabled={!canThink || isThinking}
-                    className="inline-flex items-center justify-center rounded-full border border-black/12 bg-white px-5 py-3 text-sm font-medium text-[#111111] transition hover:border-black/22 hover:bg-black/2 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isThinking ? "Thinking..." : "Run Think"}
-                  </button>
-                }
-              >
-                {thinkError ? <ErrorPanel message={thinkError} /> : null}
-                {intelligenceResult ? (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <MiniMetric
-                      label="Venue"
-                      value={intelligenceResult.recommendation.betterVenue}
-                    />
-                    <MiniMetric
-                      label="Best bet"
-                      value={intelligenceResult.recommendation.bestBet ?? "No trade"}
-                    />
-                    <MiniMetric
-                      label="Confidence"
-                      value={intelligenceResult.recommendation.confidence}
-                    />
-                  </div>
-                ) : null}
-              </ActionPanel>
+                {observationResult ? (
+                  <MarketResults result={observationResult} />
+                ) : (
+                  <PlaceholderPanel
+                    title="No market extraction yet"
+                    description="Kalshi and Polymarket output will land below the live previews after TinyFish completes both runs."
+                  />
+                )}
+              </>
             ) : null}
-          </div>
 
-          <div className="space-y-5">
-            <div className="overflow-hidden rounded-4xl border border-black/8 bg-[#f3efe9]">
-              <div className="relative aspect-video bg-[#ede7dd]">
-                <video
-                  key={selectedSample.videoSrc}
-                  className="h-full w-full object-cover"
-                  controls
-                  poster={selectedSample.posterSrc}
-                  preload="metadata"
-                >
-                  <source src={selectedSample.videoSrc} type="video/mp4" />
-                </video>
-              </div>
-              <div className="border-t border-black/8 bg-white px-5 py-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.3em] text-[#b46d24]">
-                      Now in focus
-                    </p>
-                    <p className="mt-2 text-xl text-[#111111]">{activeStepLabel}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-sm text-black/52">
-                    <span>{selectedSample.speaker}</span>
-                    <span>{selectedSample.context}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            {activeTab === "think" ? (
+              <>
+                <TabToolbar
+                  eyebrow="Tab 3"
+                  title="Think"
+                  description="Trigger OpenAI, review one or more recommended bets, and open the picked market links when available."
+                  status={thinkStatus}
+                  actionLabel={isThinking ? "Thinking..." : "Run OpenAI"}
+                  onAction={handleThink}
+                  disabled={!canThink || isThinking}
+                />
 
-            <div className="grid gap-3 sm:grid-cols-3">
-              <MiniMetric label="Clip" value={selectedSample.durationLabel} />
-              <MiniMetric label="Observed" value={`${totalObservedMarkets} bets`} />
-              <MiniMetric
-                label="Decision"
-                value={intelligenceResult?.recommendation.betterVenue ?? "Pending"}
-              />
-            </div>
+                {thinkError ? <ErrorPanel message={thinkError} /> : null}
 
-            {!humeResult && !observationResult && !intelligenceResult ? (
-              <div className="rounded-4xl border border-black/8 bg-white px-5 py-4">
-                <p className="text-sm leading-6 text-black/54">
-                  Run Watch to unlock the Hume summary, then Act for TinyFish, then
-                  Think for the OpenAI recommendation.
-                </p>
-              </div>
+                {intelligenceResult ? (
+                  <RecommendationCard result={intelligenceResult} />
+                ) : (
+                  <PlaceholderPanel
+                    title="No recommendation yet"
+                    description="Run OpenAI after Watch and Act are complete to compare the Hume signal against the observed market prices."
+                  />
+                )}
+              </>
             ) : null}
           </div>
         </div>
       </section>
-
-      {humeResult || observationResult || intelligenceResult ? (
-        <>
-          {humeResult ? <ResultsDashboard result={humeResult} /> : null}
-          {observationResult ? <MarketResults result={observationResult} /> : null}
-          {intelligenceResult ? <RecommendationCard result={intelligenceResult} /> : null}
-        </>
-      ) : (
-        <EmptyState sample={selectedSample} />
-      )}
     </main>
   );
 }
@@ -661,39 +703,6 @@ async function consumeObserveStream(
   return { result: finalResult };
 }
 
-function ActionPanel({
-  eyebrow,
-  title,
-  description,
-  footer,
-  action,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-  footer: string;
-  action: React.ReactNode;
-  children?: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-4xl border border-black/8 bg-white p-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="max-w-2xl space-y-2">
-          <p className="text-xs uppercase tracking-[0.32em] text-[#b46d24]">{eyebrow}</p>
-          <h2 className="text-2xl text-[#111111]">{title}</h2>
-          <p className="text-sm leading-6 text-black/56">{description}</p>
-        </div>
-        {action}
-      </div>
-      <div className="mt-4 space-y-4">
-        <p className="text-sm leading-6 text-black/52">{footer}</p>
-        {children}
-      </div>
-    </section>
-  );
-}
-
 function ObserveAgentStreamCard({ card }: { card: ObserveAgentCard }) {
   const stateConfig: Record<
     ObserveAgentCard["state"],
@@ -701,49 +710,30 @@ function ObserveAgentStreamCard({ card }: { card: ObserveAgentCard }) {
   > = {
     pending: {
       label: "Pending",
-      className: "border-black/10 bg-white text-black/54",
+      className: "border-black bg-white text-black/54",
     },
     running: {
       label: "Running",
-      className: "border-[#eab071]/40 bg-[#fff5e8] text-[#945d1e]",
+      className: "border-black bg-black text-white",
     },
     complete: {
       label: "Complete",
-      className: "border-[#98c18d]/40 bg-[#eef8ea] text-[#51734a]",
+      className: "border-black bg-white text-black",
     },
     failed: {
       label: "Failed",
-      className: "border-[#d97272]/30 bg-[#fff2f2] text-[#8d3535]",
+      className: "border-black bg-white text-black",
     },
   };
 
   const current = stateConfig[card.state];
 
   return (
-    <article className="rounded-3xl border border-black/8 bg-[#faf7f2] p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-[#b46d24]">{card.site}</p>
-          <p className="mt-2 text-lg text-[#111111]">{card.message}</p>
-        </div>
-        <span
-          className={`rounded-full border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${current.className}`}
-        >
-          {current.label}
-        </span>
-      </div>
-
-      <p className="mt-3 text-xs uppercase tracking-[0.2em] text-black/36">
-        {new URL(card.url).host}
-      </p>
-
-      {card.streamingUrl ? (
-        <div className="mt-3 space-y-3">
-          <div className="overflow-hidden rounded-2xl border border-black/8 bg-white">
-            <div className="border-b border-black/6 px-3 py-2 text-[11px] uppercase tracking-[0.24em] text-black/46">
-              Live preview
-            </div>
-            <div className="aspect-video bg-[#f3efe9]">
+    <article className="border border-black bg-white">
+      <div className="grid gap-0 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="border-b border-black xl:border-b-0 xl:border-r">
+          {card.streamingUrl ? (
+            <div className="aspect-video bg-[#ece7de]">
               <iframe
                 src={card.streamingUrl}
                 title={`${card.site} TinyFish live preview`}
@@ -753,101 +743,168 @@ function ObserveAgentStreamCard({ card }: { card: ObserveAgentCard }) {
                 referrerPolicy="no-referrer"
               />
             </div>
+          ) : (
+            <div className="flex aspect-video items-center justify-center bg-[#ece7de] px-6 text-center text-sm leading-7 text-black/58">
+              TinyFish will attach a live browser stream here as soon as the session starts.
+            </div>
+          )}
+        </div>
+        <div className="space-y-4 p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.28em] text-black/45">{card.site}</p>
+              <p className="mt-2 text-2xl text-black">{card.message}</p>
+              <p className="mt-3 text-xs uppercase tracking-[0.18em] text-black/42">
+                {new URL(card.url).host}
+              </p>
+            </div>
+            <span
+              className={`border px-3 py-1 text-[11px] uppercase tracking-[0.24em] ${current.className}`}
+            >
+              {current.label}
+            </span>
           </div>
 
-          <details className="rounded-2xl border border-black/8 bg-white px-3 py-2">
-            <summary className="cursor-pointer list-none text-xs uppercase tracking-[0.22em] text-black/48">
-              Stream link
-            </summary>
-            <div className="mt-2 space-y-2">
-              <p className="break-all text-xs leading-5 text-black/54">
-                {card.streamingUrl}
-              </p>
-              <a
-                href={card.streamingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs uppercase tracking-[0.2em] text-[#8b5619] underline decoration-black/12 underline-offset-4"
-              >
-                Open stream in new tab
-              </a>
+          {card.streamingUrl ? (
+            <a
+              href={card.streamingUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex border border-black bg-black px-4 py-3 text-xs uppercase tracking-[0.18em] text-white"
+            >
+              Open live stream
+            </a>
+          ) : null}
+
+          {card.runId ? (
+            <div className="border border-black px-4 py-3 text-xs uppercase tracking-[0.18em] text-black/52">
+              Run ID {card.runId}
             </div>
-          </details>
+          ) : null}
         </div>
-      ) : null}
+      </div>
     </article>
   );
 }
 
-function StepBadge({ label, state }: { label: string; state: StepState }) {
-  const config: Record<StepState, string> = {
-    idle: "border-black/10 bg-white text-black/54",
-    ready: "border-[#eab071]/35 bg-[#fff3e0] text-[#945d1e]",
-    running: "border-[#eab071]/35 bg-[#fff3e0] text-[#945d1e]",
-    complete: "border-[#98c18d]/35 bg-[#eef8ea] text-[#51734a]",
-    error: "border-[#d97272]/30 bg-[#fff2f2] text-[#8d3535]",
-    blocked: "border-black/10 bg-white text-black/42",
-  };
-
+function MetricTile({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm ${config[state]}`}
-    >
-      <span className="font-medium text-[#111111]">{label}</span>
-      <span className="text-xs uppercase tracking-[0.2em]">{state}</span>
-    </div>
-  );
-}
-
-function MiniMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-3xl border border-black/8 bg-white px-4 py-3">
+    <div className="bg-white px-4 py-3">
       <p className="text-xs uppercase tracking-[0.25em] text-black/38">{label}</p>
-      <p className="mt-2 text-sm leading-6 text-[#111111]">{value}</p>
+      <p className="mt-2 text-lg leading-6 text-[#111111]">{value}</p>
     </div>
   );
 }
 
-function EmptyState({ sample }: { sample: SampleVideo }) {
+function PlaceholderPanel({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
   return (
-    <section className="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
-      <div className="rounded-4xl border border-black/8 bg-white p-6">
-        <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Before you run</p>
-        <h2 className="mt-3 text-3xl text-[#111111]">Watch comes first</h2>
-        <p className="mt-4 max-w-2xl text-base leading-7 text-black/58">
-          Start with Watch to collect the Hume context, then Act with TinyFish, and
-          finally Think to decide if the trade is worth taking.
-        </p>
-      </div>
-
-      <div className="rounded-4xl border border-black/8 bg-white p-6">
-        <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Source</p>
-        <div className="mt-5 flex items-center gap-4">
-          <div className="relative h-20 w-20 overflow-hidden rounded-[1.25rem] border border-black/8">
-            <Image
-              src={sample.posterSrc}
-              alt={sample.title}
-              fill
-              sizes="80px"
-              className="object-cover"
-            />
-          </div>
-          <div>
-            <h3 className="text-2xl text-[#111111]">{sample.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-black/55">
-              {sample.sourceLabel} · {sample.licenseLabel}
-            </p>
-          </div>
-        </div>
-      </div>
+    <section className="border border-black bg-white p-5">
+      <p className="text-xs uppercase tracking-[0.3em] text-black/45">Waiting</p>
+      <h3 className="mt-3 text-2xl text-black">{title}</h3>
+      <p className="mt-4 max-w-2xl text-sm leading-7 text-black/62">{description}</p>
     </section>
   );
 }
 
 function ErrorPanel({ message }: { message: string }) {
   return (
-    <div className="rounded-[1.4rem] border border-[#d97272]/26 bg-[#fff1f1] px-4 py-3 text-sm leading-6 text-[#8d3535]">
+    <div className="border border-black bg-white px-4 py-3 text-sm leading-6 text-black">
       {message}
     </div>
+  );
+}
+
+function TabButton({
+  label,
+  title,
+  state,
+  isActive,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  state: StepState;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`grid w-full gap-2 border-b border-black px-4 py-4 text-left transition last:border-b-0 ${
+        isActive ? "bg-black text-white" : "bg-white text-black hover:bg-black/4"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <span className={`text-xs uppercase tracking-[0.28em] ${isActive ? "text-white/60" : "text-black/45"}`}>
+          {label}
+        </span>
+        <span className="text-[11px] uppercase tracking-[0.2em]">{state}</span>
+      </div>
+      <span className="text-2xl">{title}</span>
+    </button>
+  );
+}
+
+function TabToolbar({
+  eyebrow,
+  title,
+  description,
+  status,
+  actionLabel,
+  onAction,
+  disabled,
+  secondaryActionLabel,
+  onSecondaryAction,
+  secondaryDisabled,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  status: string;
+  actionLabel: string;
+  onAction: () => void;
+  disabled: boolean;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
+  secondaryDisabled?: boolean;
+}) {
+  return (
+    <section className="border border-black bg-white p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="max-w-3xl space-y-2">
+          <p className="text-xs uppercase tracking-[0.3em] text-black/45">{eyebrow}</p>
+          <h2 className="text-3xl text-black">{title}</h2>
+          <p className="text-sm leading-7 text-black/62">{description}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onAction}
+            disabled={disabled}
+            className="border border-black bg-black px-5 py-3 text-sm uppercase tracking-[0.16em] text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {actionLabel}
+          </button>
+          {secondaryActionLabel && onSecondaryAction ? (
+            <button
+              type="button"
+              onClick={onSecondaryAction}
+              disabled={secondaryDisabled}
+              className="border border-black bg-white px-5 py-3 text-sm uppercase tracking-[0.16em] text-black disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              {secondaryActionLabel}
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <p className="mt-4 text-sm leading-6 text-black/62">{status}</p>
+    </section>
   );
 }

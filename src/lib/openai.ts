@@ -3,6 +3,8 @@ import OpenAI from "openai";
 import type {
   BettingRecommendation,
   HumeContext,
+  MarketSite,
+  RecommendedBet,
   TinyFishSiteResult,
 } from "@/lib/types";
 
@@ -42,13 +44,185 @@ function normalizeConfidence(value: unknown): BettingRecommendation["confidence"
     : "medium";
 }
 
-function normalizeRecommendation(payload: unknown): BettingRecommendation {
+function normalizeVenue(value: unknown): MarketSite | null {
+  return value === "kalshi" || value === "polymarket" ? value : null;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return value?.trim().toLowerCase().replace(/[^a-z0-9]+/g, " ") ?? "";
+}
+
+function scoreMarketMatch(bestBet: string, marketName: string) {
+  const bestBetTokens = normalizeText(bestBet)
+    .split(" ")
+    .filter(Boolean);
+  const marketTokens = new Set(
+    normalizeText(marketName)
+      .split(" ")
+      .filter(Boolean),
+  );
+
+  if (bestBetTokens.length === 0 || marketTokens.size === 0) {
+    return 0;
+  }
+
+  return bestBetTokens.reduce(
+    (score, token) => score + (marketTokens.has(token) ? 1 : 0),
+    0,
+  );
+}
+
+function resolveRecommendedMarketUrl(
+  bestBet: string | null,
+  markets: TinyFishSiteResult[],
+) {
+  if (!bestBet) {
+    return null;
+  }
+
+  const allMarkets = markets
+    .filter((siteResult) => siteResult.success)
+    .flatMap((siteResult) => siteResult.markets);
+
+  const exactMatch =
+    allMarkets.find(
+      (market) => normalizeText(market.betName) === normalizeText(bestBet),
+    ) ?? null;
+
+  if (exactMatch?.marketUrl) {
+    return exactMatch.marketUrl;
+  }
+
+  let bestMatch: { marketUrl: string; score: number } | null = null;
+
+  for (const market of allMarkets) {
+    if (!market.marketUrl) {
+      continue;
+    }
+
+    const score = scoreMarketMatch(bestBet, market.betName);
+
+    if (score === 0) {
+      continue;
+    }
+
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = {
+        marketUrl: market.marketUrl,
+        score,
+      };
+    }
+  }
+
+  return bestMatch?.marketUrl ?? null;
+}
+
+function resolveMarketUrl(
+  venue: MarketSite,
+  betName: string,
+  markets: TinyFishSiteResult[],
+) {
+  const venueMarkets = markets
+    .filter((siteResult) => siteResult.site === venue && siteResult.success)
+    .flatMap((siteResult) => siteResult.markets);
+
+  const exactMatch =
+    venueMarkets.find(
+      (market) => normalizeText(market.betName) === normalizeText(betName),
+    ) ?? null;
+
+  if (exactMatch?.marketUrl) {
+    return exactMatch.marketUrl;
+  }
+
+  let bestMatch: { marketUrl: string; score: number } | null = null;
+
+  for (const market of venueMarkets) {
+    if (!market.marketUrl) {
+      continue;
+    }
+
+    const score = scoreMarketMatch(betName, market.betName);
+
+    if (score === 0) {
+      continue;
+    }
+
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = {
+        marketUrl: market.marketUrl,
+        score,
+      };
+    }
+  }
+
+  return bestMatch?.marketUrl ?? null;
+}
+
+function normalizeRecommendedBets(
+  value: unknown,
+  markets: TinyFishSiteResult[],
+): RecommendedBet[] {
+  const normalized: RecommendedBet[] = [];
+
+  for (const entry of Array.isArray(value) ? value : []) {
+    const record = asRecord(entry);
+    const venue = normalizeVenue(record?.venue);
+    const betName = asString(record?.betName ?? record?.bestBet ?? record?.market);
+    const outcome = asString(record?.outcome ?? record?.bestOutcome);
+
+    if (!venue || !betName) {
+      continue;
+    }
+
+    normalized.push({
+      venue,
+      betName,
+      outcome,
+      marketUrl: resolveMarketUrl(venue, betName, markets),
+    });
+  }
+
+  return normalized;
+}
+
+function buildFallbackRecommendedBets(markets: TinyFishSiteResult[]): RecommendedBet[] {
+  const fallbacks = markets
+    .filter((siteResult) => siteResult.success)
+    .flatMap((siteResult) =>
+      siteResult.markets.slice(0, 2).map((market) => ({
+        venue: siteResult.site,
+        betName: market.betName,
+        outcome: market.outcomes[0]?.name ?? null,
+        marketUrl: market.marketUrl ?? null,
+      })),
+    );
+
+  return fallbacks.slice(0, 2).map((bet) => ({
+    venue: bet.venue,
+    betName: bet.betName,
+    outcome: bet.outcome,
+    marketUrl: bet.marketUrl,
+  }));
+}
+
+function normalizeRecommendation(
+  payload: unknown,
+  markets: TinyFishSiteResult[],
+): BettingRecommendation {
   const payloadRecord = asRecord(payload);
+  const recommendedBets =
+    normalizeRecommendedBets(payloadRecord?.recommendedBets, markets);
+  const fallbackRecommendedBets =
+    recommendedBets.length > 0 ? recommendedBets : buildFallbackRecommendedBets(markets);
+  const firstRecommendation = fallbackRecommendedBets[0] ?? null;
+  const betterVenue = normalizeVenue(payloadRecord?.betterVenue) ?? firstRecommendation?.venue ?? "none";
 
   return {
-    betterVenue: "kalshi",
-    bestBet: asString(payloadRecord?.bestBet),
-    bestOutcome: asString(payloadRecord?.bestOutcome),
+    betterVenue,
+    bestBet: asString(payloadRecord?.bestBet) ?? firstRecommendation?.betName ?? null,
+    bestOutcome:
+      asString(payloadRecord?.bestOutcome) ?? firstRecommendation?.outcome ?? null,
     estimatedLikelihood:
       asString(payloadRecord?.estimatedLikelihood) ??
       "No likelihood estimate returned.",
@@ -60,6 +234,13 @@ function normalizeRecommendation(payload: unknown): BettingRecommendation {
       asString(payloadRecord?.uncertainty) ??
       "Uncertainty was not specified.",
     confidence: normalizeConfidence(payloadRecord?.confidence),
+    recommendedMarketUrl:
+      firstRecommendation?.marketUrl ??
+      resolveRecommendedMarketUrl(
+        asString(payloadRecord?.bestBet) ?? firstRecommendation?.betName ?? null,
+        markets,
+      ),
+    recommendedBets: fallbackRecommendedBets,
   };
 }
 
@@ -79,16 +260,23 @@ You are the Brain in an Eyes -> Hands -> Brain workflow:
 
 Task:
 - Compare Kalshi and Polymarket only for US/Iran-related bets returned above
-- Identify the single best bet candidate, if any
-- Decide which venue is better for this moment: kalshi, polymarket, or none
+- Recommend at least 1 concrete bet from the returned markets. You may recommend more than 1.
+- Decide which venue is better for this moment: kalshi or polymarket
 - Reason about likelihood and whether the odds appear attractive or not
-- Be conservative when the data is sparse or ambiguous
+- Even when the data is sparse or ambiguous, still return at least one recommendation from the provided markets
 
 Return JSON only in exactly this shape:
 {
-  "betterVenue": "kalshi | polymarket | none",
+  "betterVenue": "kalshi | polymarket",
   "bestBet": "string | null",
   "bestOutcome": "string | null",
+  "recommendedBets": [
+    {
+      "venue": "kalshi | polymarket",
+      "betName": "string",
+      "outcome": "string | null"
+    }
+  ],
   "estimatedLikelihood": "short plain-English estimate",
   "oddsEdge": "short plain-English value judgment",
   "rationale": "2-4 sentence explanation using both Hume and market data",
@@ -116,5 +304,5 @@ export async function generateBettingRecommendation(
     throw new Error("OpenAI did not return recommendation output.");
   }
 
-  return normalizeRecommendation(JSON.parse(outputText));
+  return normalizeRecommendation(JSON.parse(outputText), markets);
 }

@@ -21,6 +21,8 @@ export type SegmentInsight = {
   id: string;
   label: string;
   rangeLabel: string;
+  startSeconds?: number;
+  endSeconds?: number;
   transcript?: string;
   speakerId?: string;
   topEmotions: RankedEmotion[];
@@ -31,6 +33,7 @@ export type FaceMoment = {
   id: string;
   faceId: string;
   timeLabel: string;
+  timeSeconds?: number;
   topEmotions: RankedEmotion[];
   topDescriptions: RankedEmotion[];
 };
@@ -73,6 +76,7 @@ export type MarketOutcome = {
 
 export type ExtractedMarket = {
   betName: string;
+  marketUrl?: string | null;
   outcomes: MarketOutcome[];
 };
 
@@ -129,10 +133,19 @@ export type HumeContext = {
 
 export type RecommendationVenue = MarketSite | "none";
 
+export type RecommendedBet = {
+  venue: MarketSite;
+  betName: string;
+  outcome: string | null;
+  marketUrl?: string | null;
+};
+
 export type BettingRecommendation = {
   betterVenue: RecommendationVenue;
   bestBet: string | null;
   bestOutcome: string | null;
+  recommendedMarketUrl?: string | null;
+  recommendedBets: RecommendedBet[];
   estimatedLikelihood: string;
   oddsEdge: string;
   rationale: string;
