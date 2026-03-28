@@ -1,9 +1,9 @@
-# Hume Video Analyzer
+# TinyAlpha
 
-Next.js demo for submitting bundled speaking clips to Hume Expression Measurement
-and reviewing face, prosody, and language insights in one dashboard. After the
-Hume step, the app can also run TinyFish on Kalshi and Polymarket, then ask
-OpenAI to compare both venues and recommend the stronger edge.
+TinyAlpha is a Next.js app for submitting bundled speaking clips to Hume
+Expression Measurement, reviewing face, prosody, and language insights, then
+running TinyFish on Kalshi and Polymarket before asking OpenAI to recommend one
+or more market ideas.
 
 ## Setup
 
