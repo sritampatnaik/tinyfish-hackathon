@@ -11,19 +11,16 @@ function formatPercent(score: number) {
 
 export function ResultsDashboard({ result }: ResultsDashboardProps) {
   return (
-    <section className="space-y-8">
-      <div className="rounded-4xl border border-black/8 bg-[radial-gradient(circle_at_top_left,rgba(248,184,111,0.12),transparent_42%),white] p-7">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+    <section className="space-y-4">
+      <div className="rounded-4xl border border-black/8 bg-white p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl space-y-3">
-            <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Result</p>
+            <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Hume</p>
             <h2 className="text-3xl leading-tight text-[#111111] sm:text-4xl">
               {result.sampleTitle}
             </h2>
-            <p className="max-w-2xl text-base leading-7 text-black/58">
+            <p className="max-w-2xl text-base leading-7 text-black/60">
               {result.summary.strongestMoment}
-            </p>
-            <p className="max-w-2xl text-sm leading-6 text-black/46">
-              {result.summary.transcriptPreview}
             </p>
           </div>
 
@@ -34,11 +31,11 @@ export function ResultsDashboard({ result }: ResultsDashboardProps) {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-3">
-          {result.summary.dominantEmotions.slice(0, 4).map((emotion) => (
+        <div className="mt-5 flex flex-wrap gap-2">
+          {result.summary.dominantEmotions.slice(0, 2).map((emotion) => (
             <span
               key={emotion.name}
-              className="rounded-full border border-[#f0c28b] bg-[#fff7ee] px-4 py-2 text-sm text-[#8f5b1d]"
+              className="rounded-full border border-[#f0c28b] bg-[#fff7ee] px-3 py-2 text-sm text-[#8f5b1d]"
             >
               {emotion.name} {formatPercent(emotion.score)}
             </span>
@@ -46,20 +43,29 @@ export function ResultsDashboard({ result }: ResultsDashboardProps) {
         </div>
       </div>
 
-      <div className="grid gap-8 xl:grid-cols-[1.25fr_0.95fr]">
-        <EmotionTimeline
-          title="Prosody"
-          subtitle="Tone over time"
-          segments={result.prosodySegments}
-        />
+      <div className="grid gap-4">
+        <DisclosurePanel title="Transcript preview">
+          <p className="text-sm leading-7 text-black/62">{result.summary.transcriptPreview}</p>
+        </DisclosurePanel>
 
-        <section className="rounded-4xl border border-black/8 bg-white p-6">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Faces</p>
-            <h3 className="text-2xl text-[#111111]">Clusters</h3>
-          </div>
+        <DisclosurePanel title="Prosody timeline">
+          <EmotionTimeline
+            title="Prosody"
+            subtitle="Tone over time"
+            segments={result.prosodySegments}
+          />
+        </DisclosurePanel>
 
-          <div className="mt-6 space-y-4">
+        <DisclosurePanel title="Language timeline">
+          <EmotionTimeline
+            title="Language"
+            subtitle="Transcript"
+            segments={result.languageSegments}
+          />
+        </DisclosurePanel>
+
+        <DisclosurePanel title="Face clusters">
+          <div className="space-y-4">
             {result.faceBreakdown.length === 0 ? (
               <p className="text-sm text-black/50">
                 No face clusters were exposed in a UI-friendly way for this job.
@@ -98,25 +104,10 @@ export function ResultsDashboard({ result }: ResultsDashboardProps) {
               ))
             )}
           </div>
-        </section>
-      </div>
+        </DisclosurePanel>
 
-      <div className="grid gap-8 xl:grid-cols-[1.1fr_1fr]">
-        <EmotionTimeline
-          title="Language"
-          subtitle="Transcript"
-          segments={result.languageSegments}
-        />
-
-        <section className="rounded-4xl border border-black/8 bg-white p-6">
-          <div className="space-y-2">
-            <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">
-              Face moments
-            </p>
-            <h3 className="text-2xl text-[#111111]">Frames</h3>
-          </div>
-
-          <div className="mt-6 space-y-4">
+        <DisclosurePanel title="Face moments">
+          <div className="space-y-4">
             {result.faceMoments.slice(0, 6).map((moment) => (
               <article
                 key={moment.id}
@@ -142,7 +133,7 @@ export function ResultsDashboard({ result }: ResultsDashboardProps) {
               </article>
             ))}
           </div>
-        </section>
+        </DisclosurePanel>
       </div>
     </section>
   );
@@ -154,5 +145,22 @@ function MetricCard({ label, value }: { label: string; value: number }) {
       <p className="text-xs uppercase tracking-[0.28em] text-black/38">{label}</p>
       <p className="mt-2 text-2xl text-[#111111]">{value}</p>
     </div>
+  );
+}
+
+function DisclosurePanel({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details className="rounded-4xl border border-black/8 bg-white p-5">
+      <summary className="cursor-pointer list-none text-lg text-[#111111]">
+        {title}
+      </summary>
+      <div className="mt-4">{children}</div>
+    </details>
   );
 }

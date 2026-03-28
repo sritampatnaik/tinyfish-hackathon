@@ -1,7 +1,9 @@
 # Hume Video Analyzer
 
 Next.js demo for submitting bundled speaking clips to Hume Expression Measurement
-and reviewing face, prosody, and language insights in one dashboard.
+and reviewing face, prosody, and language insights in one dashboard. After the
+Hume step, the app can also run TinyFish on Kalshi and Polymarket, then ask
+OpenAI to compare both venues and recommend the stronger edge.
 
 ## Setup
 
@@ -16,6 +18,12 @@ npm install
 ```bash
 cp .env.example .env.local
 ```
+
+Set:
+
+- `HUME_API_KEY`
+- `TINYFISH_API_KEY`
+- `OPENAI_API_KEY`
 
 3. Start the app:
 
@@ -37,5 +45,17 @@ The demo now ships with a single locally bundled news sample:
 
 - `POST /api/analyze` uploads the selected local sample video to Hume.
 - `GET /api/jobs/[jobId]` polls Hume job status and normalizes predictions.
-- The UI renders dominant emotions, prosody moments, language sentiment, and
-  tracked face summaries.
+- `POST /api/markets/analyze` runs the Eyes -> Hands -> Brain chain:
+  - Hume summary is used as the `Eyes` context
+  - TinyFish extracts US/Iran-related markets from Kalshi and Polymarket as the `Hands`
+  - OpenAI compares both and returns a recommendation as the `Brain`
+- The UI renders dominant emotions, prosody moments, live market listings, and
+  a final recommendation.
+
+## Verification
+
+- Run `npm run lint`
+- Run `npm run build`
+- Start `npm run dev`
+- Analyze the bundled video first
+- Then trigger `Run TinyFish + OpenAI` to verify the market and recommendation steps

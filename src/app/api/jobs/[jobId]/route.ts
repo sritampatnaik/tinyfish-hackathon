@@ -1,22 +1,34 @@
 import { NextResponse } from "next/server";
 
+import { writeCachedHumeResult } from "@/lib/hume-cache";
 import { getHumeJobDetails, getHumeJobPredictions } from "@/lib/hume";
 import { normalizeHumeResult } from "@/lib/hume-normalize";
 
 export const runtime = "nodejs";
 
-function getStatus(jobDetails: unknown) {
+function getState(jobDetails: unknown) {
   if (typeof jobDetails !== "object" || jobDetails === null) {
-    return "UNKNOWN";
+    return null;
   }
 
   const state = "state" in jobDetails ? jobDetails.state : undefined;
   if (typeof state !== "object" || state === null) {
-    return "UNKNOWN";
+    return null;
   }
 
-  const status = "status" in state ? state.status : undefined;
+  return state;
+}
+
+function getStatus(jobDetails: unknown) {
+  const state = getState(jobDetails);
+  const status = state && "status" in state ? state.status : undefined;
   return typeof status === "string" ? status : "UNKNOWN";
+}
+
+function getFailureMessage(jobDetails: unknown) {
+  const state = getState(jobDetails);
+  const message = state && "message" in state ? state.message : undefined;
+  return typeof message === "string" ? message : undefined;
 }
 
 export async function GET(
@@ -38,11 +50,17 @@ export async function GET(
     const status = getStatus(jobDetails);
 
     if (status !== "COMPLETED") {
-      return NextResponse.json({ jobId, sampleId, status });
+      return NextResponse.json({
+        jobId,
+        sampleId,
+        status,
+        error: status === "FAILED" ? getFailureMessage(jobDetails) : undefined,
+      });
     }
 
     const predictions = await getHumeJobPredictions(jobId);
     const result = normalizeHumeResult(sampleId, jobId, jobDetails, predictions);
+    await writeCachedHumeResult(sampleId, result);
 
     return NextResponse.json({
       jobId,

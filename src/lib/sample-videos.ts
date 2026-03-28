@@ -6,9 +6,9 @@ export const sampleVideos: SampleVideo[] = [
     title: "Trump News Clip",
     speaker: "Donald Trump and press audio",
     context: "Press-style news segment",
-    durationLabel: "14:17",
+    durationLabel: "06:00",
     description:
-      "A single bundled news clip with a long speaking window, broadcast pacing, and clear on-screen facial framing for Hume face, prosody, and language analysis.",
+      "A trimmed six-minute news clip with broadcast pacing and clear on-screen facial framing for faster Hume face, prosody, and language analysis.",
     sourceLabel: "Local bundled sample video",
     licenseLabel: "User-provided media",
     videoSrc: "/samples/trump-news.mp4",

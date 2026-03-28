@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #fcfcfa;
+  --background: #ffffff;
   --foreground: #111111;
   --muted: rgba(17, 17, 17, 0.62);
   --surface: rgba(255, 255, 255, 0.92);
@@ -27,10 +27,6 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Avenir Next", "Segoe UI", sans-serif;
-  background-image:
-    radial-gradient(circle at top left, rgba(248, 184, 111, 0.12), transparent 24%),
-    radial-gradient(circle at 90% 0%, rgba(0, 0, 0, 0.04), transparent 18%),
-    linear-gradient(180deg, #fffdf8 0%, #fcfcfa 48%, #f7f6f1 100%);
 }
 
 a,
