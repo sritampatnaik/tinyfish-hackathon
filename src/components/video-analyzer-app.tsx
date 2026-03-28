@@ -52,14 +52,15 @@ function wait(milliseconds: number) {
 
 export function VideoAnalyzerApp() {
   const [selectedSampleId, setSelectedSampleId] = useState(sampleVideos[0]?.id ?? "");
-  const [observeStatus, setObserveStatus] = useState("Waiting to observe");
-  const [analyzeStatus, setAnalyzeStatus] = useState("Waiting for observation");
-  const [actStatus, setActStatus] = useState("Waiting for recommendation");
-  const [isObserving, setIsObserving] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [observeError, setObserveError] = useState<string | null>(null);
-  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
-  const [actMessage, setActMessage] = useState<string | null>(null);
+  const [watchStatus, setWatchStatus] = useState("Waiting to watch");
+  const [actStatus, setActStatus] = useState("Waiting for watch");
+  const [thinkStatus, setThinkStatus] = useState("Waiting for act");
+  const [isWatching, setIsWatching] = useState(false);
+  const [isActing, setIsActing] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
+  const [watchError, setWatchError] = useState<string | null>(null);
+  const [actError, setActError] = useState<string | null>(null);
+  const [thinkError, setThinkError] = useState<string | null>(null);
   const [humeResult, setHumeResult] = useState<AnalysisResult | null>(null);
   const [observationResult, setObservationResult] = useState<MarketObservationResult | null>(
     null,
@@ -95,47 +96,52 @@ export function VideoAnalyzerApp() {
   );
 
   const topObservedBets = observedBetPreview.slice(0, 3);
-  const canAnalyze = Boolean(humeResult && observationResult);
-  const canAct = Boolean(
-    intelligenceResult?.recommendation.betterVenue === "kalshi" &&
-      intelligenceResult.recommendation.bestBet,
-  );
+  const canAct = Boolean(humeResult);
+  const canThink = Boolean(humeResult && observationResult);
   const shouldShowObserveAgents =
-    isObserving && humeResult !== null && observationResult === null;
+    isActing && humeResult !== null && observationResult === null;
 
-  const observeState: StepState = isObserving
+  const watchState: StepState = isWatching
     ? "running"
-    : observeError
+    : watchError
       ? "error"
-      : observationResult
+      : humeResult
         ? "complete"
         : "idle";
 
-  const analyzeState: StepState = isAnalyzing
+  const actState: StepState = isActing
     ? "running"
-    : analyzeError
+    : actError
       ? "error"
-      : intelligenceResult
+      : observationResult
         ? "complete"
-        : canAnalyze
+        : canAct
           ? "ready"
           : "blocked";
 
-  const actState: StepState = canAct
-    ? "ready"
-    : intelligenceResult
-      ? "blocked"
-      : "blocked";
-
-  const activeStepLabel = isObserving
-    ? "Observe is running"
-    : isAnalyzing
-      ? "Analyze is running"
+  const thinkState: StepState = isThinking
+    ? "running"
+    : thinkError
+      ? "error"
       : intelligenceResult
-        ? "Act is ready to review"
-        : observationResult
-          ? "Analyze is ready"
-          : "Observe is next";
+        ? "complete"
+        : canThink
+          ? "ready"
+          : "blocked";
+
+  const activeStepLabel = isWatching
+    ? "Watch is running"
+    : isActing
+      ? "Act is running"
+      : isThinking
+        ? "Think is running"
+        : intelligenceResult
+          ? "Think is complete"
+          : observationResult
+            ? "Think is ready"
+            : humeResult
+              ? "Act is ready"
+              : "Watch is next";
 
   const updateObserveAgentCard = (card: ObserveAgentCard) => {
     setObserveAgents((current) => {
@@ -153,22 +159,22 @@ export function VideoAnalyzerApp() {
     });
   };
 
-  const handleObserve = async () => {
+  const handleWatch = async () => {
     if (!selectedSample) {
       return;
     }
 
-    setIsObserving(true);
-    setObserveError(null);
-    setAnalyzeError(null);
-    setActMessage(null);
+    setIsWatching(true);
+    setWatchError(null);
+    setActError(null);
+    setThinkError(null);
     setHumeResult(null);
     setObservationResult(null);
     setIntelligenceResult(null);
     setObserveAgents([]);
-    setObserveStatus("Uploading clip to Hume");
-    setAnalyzeStatus("Waiting for observation");
-    setActStatus("Waiting for recommendation");
+    setWatchStatus("Uploading clip to Hume");
+    setActStatus("Waiting for watch");
+    setThinkStatus("Waiting for act");
 
     try {
       const submitResponse = await fetch("/api/analyze", {
@@ -196,13 +202,13 @@ export function VideoAnalyzerApp() {
       if (submitPayload.status === "COMPLETED" && submitPayload.result) {
         completedHumeResult = submitPayload.result;
         setHumeResult(submitPayload.result);
-        setObserveStatus(
+        setWatchStatus(
           submitPayload.cached
-            ? "Using cached Hume analysis. Running TinyFish on markets"
-            : "Hume complete. Running TinyFish on markets",
+            ? "Using cached Hume analysis."
+            : "Watch complete.",
         );
       } else if (submitPayload.jobId) {
-        setObserveStatus("Observing with Hume");
+        setWatchStatus("Watching with Hume");
 
         for (let attempt = 0; attempt < HUME_MAX_POLL_ATTEMPTS; attempt += 1) {
           const pollResponse = await fetch(
@@ -218,10 +224,10 @@ export function VideoAnalyzerApp() {
           if (pollPayload.status === "COMPLETED" && pollPayload.result) {
             completedHumeResult = pollPayload.result;
             setHumeResult(pollPayload.result);
-            setObserveStatus(
+            setWatchStatus(
               pollPayload.cached
-                ? "Using cached Hume analysis. Running TinyFish on markets"
-                : "Hume complete. Running TinyFish on markets",
+                ? "Using cached Hume analysis."
+                : "Watch complete.",
             );
             break;
           }
@@ -230,7 +236,7 @@ export function VideoAnalyzerApp() {
             throw new Error(pollPayload.error ?? "Hume marked the job as failed.");
           }
 
-          setObserveStatus(`Hume status: ${pollPayload.status}`);
+          setWatchStatus(`Hume status: ${pollPayload.status}`);
           await wait(HUME_POLL_INTERVAL_MS);
         }
       } else {
@@ -243,17 +249,42 @@ export function VideoAnalyzerApp() {
         );
       }
 
-      setObserveStatus("TinyFish is exploring live markets");
-      setObserveAgents(
-        OBSERVE_TARGETS.map((target) => ({
-          site: target.site,
-          url: target.url,
-          state: "pending",
-          message: "Waiting for browser agent.",
-          updatedAt: new Date().toISOString(),
-        })),
+      setActStatus("Ready for TinyFish");
+    } catch (error) {
+      setWatchError(
+        error instanceof Error ? error.message : "Unexpected analysis failure.",
       );
+      setWatchStatus("Watch failed");
+      setActStatus("Waiting for watch");
+      setThinkStatus("Waiting for act");
+    } finally {
+      setIsWatching(false);
+    }
+  };
 
+  const handleAct = async () => {
+    if (!humeResult) {
+      return;
+    }
+
+    setIsActing(true);
+    setActError(null);
+    setThinkError(null);
+    setObservationResult(null);
+    setIntelligenceResult(null);
+    setObserveAgents(
+      OBSERVE_TARGETS.map((target) => ({
+        site: target.site,
+        url: target.url,
+        state: "pending",
+        message: "Waiting for browser agent.",
+        updatedAt: new Date().toISOString(),
+      })),
+    );
+    setActStatus("TinyFish is exploring live markets");
+    setThinkStatus("Waiting for act");
+
+    try {
       const observePayload = await consumeObserveStream(updateObserveAgentCard);
 
       const successfulSites = observePayload.result.markets.filter(
@@ -261,32 +292,30 @@ export function VideoAnalyzerApp() {
       ).length;
 
       setObservationResult(observePayload.result);
-      setObserveStatus(
-        `Observe complete. ${successfulSites}/${observePayload.result.markets.length} sites responded.`,
+      setActStatus(
+        `Act complete. ${successfulSites}/${observePayload.result.markets.length} sites responded.`,
       );
-      setAnalyzeStatus("Ready for OpenAI analysis");
+      setThinkStatus("Ready for OpenAI analysis");
     } catch (error) {
-      setObserveError(
-        error instanceof Error ? error.message : "Unexpected analysis failure.",
+      setActError(
+        error instanceof Error ? error.message : "Unexpected TinyFish failure.",
       );
-      setObserveStatus("Observe failed");
-      setAnalyzeStatus("Waiting for observation");
+      setActStatus("Act failed");
+      setThinkStatus("Waiting for act");
     } finally {
-      setIsObserving(false);
+      setIsActing(false);
     }
   };
 
-  const handleAnalyze = async () => {
+  const handleThink = async () => {
     if (!humeResult || !observationResult) {
       return;
     }
 
-    setIsAnalyzing(true);
-    setAnalyzeError(null);
-    setActMessage(null);
+    setIsThinking(true);
+    setThinkError(null);
     setIntelligenceResult(null);
-    setAnalyzeStatus("OpenAI is comparing the observed bets");
-    setActStatus("Waiting for recommendation");
+    setThinkStatus("OpenAI is comparing the observed bets");
 
     try {
       const response = await fetch("/api/recommendation/analyze", {
@@ -307,37 +336,15 @@ export function VideoAnalyzerApp() {
       }
 
       setIntelligenceResult(payload.result);
-      setAnalyzeStatus("Analyze complete");
-      setActStatus(
-        payload.result.recommendation.betterVenue === "kalshi" &&
-          payload.result.recommendation.bestBet
-          ? "Kalshi action is ready to review"
-          : "No Kalshi action recommended",
-      );
+      setThinkStatus("Think complete");
     } catch (error) {
-      setAnalyzeError(
+      setThinkError(
         error instanceof Error ? error.message : "Unexpected market failure.",
       );
-      setAnalyzeStatus("Analyze failed");
-      setActStatus("Waiting for recommendation");
+      setThinkStatus("Think failed");
     } finally {
-      setIsAnalyzing(false);
+      setIsThinking(false);
     }
-  };
-
-  const handleAct = () => {
-    if (!intelligenceResult) {
-      return;
-    }
-
-    if (!canAct) {
-      setActMessage("Act only unlocks when OpenAI picks Kalshi as the better venue.");
-      return;
-    }
-
-    setActMessage(
-      "Act is staged in the UI, but live Kalshi execution is not wired yet. We still need order size, account auth, and a final confirmation step before TinyFish can place a real trade.",
-    );
   };
 
   if (!selectedSample) {
@@ -354,7 +361,7 @@ export function VideoAnalyzerApp() {
                 TinyFish Trading Console
               </p>
               <h1 className="max-w-3xl text-4xl leading-none text-[#111111] sm:text-5xl">
-                Observe first. Analyze second. Act only if the edge is real.
+                Watch first. Act second. Think when the signals are in.
               </h1>
               <p className="max-w-2xl text-base leading-7 text-black/56">
                 A lighter workflow that reveals details only when they become useful.
@@ -362,9 +369,9 @@ export function VideoAnalyzerApp() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <StepBadge label="Observe" state={observeState} />
-              <StepBadge label="Analyze" state={analyzeState} />
+              <StepBadge label="Watch" state={watchState} />
               <StepBadge label="Act" state={actState} />
+              <StepBadge label="Think" state={thinkState} />
             </div>
 
             <div className="rounded-4xl border border-black/8 bg-[#faf7f2] p-5">
@@ -407,52 +414,53 @@ export function VideoAnalyzerApp() {
             </div>
 
             <ActionPanel
-              eyebrow="Observe"
-              title="Hume, then TinyFish"
-              description="One primary action runs Hume first, then starts TinyFish browser agents."
-              footer={observeStatus}
+              eyebrow="Watch"
+              title="Hume analysis"
+              description="Watch only runs Hume and prepares the emotional context for the next step."
+              footer={watchStatus}
               action={
                 <button
                   type="button"
-                  onClick={handleObserve}
-                  disabled={isObserving}
+                  onClick={handleWatch}
+                  disabled={isWatching}
                   className="inline-flex items-center justify-center rounded-full bg-[#111111] px-5 py-3 text-sm font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isObserving ? "Observing..." : "Run Observe"}
+                  {isWatching ? "Watching..." : "Run Watch"}
                 </button>
               }
             >
-              {observeError ? <ErrorPanel message={observeError} /> : null}
-              {shouldShowObserveAgents ? (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {observeAgents.map((card) => (
-                    <ObserveAgentStreamCard key={card.site} card={card} />
-                  ))}
-                </div>
-              ) : null}
+              {watchError ? <ErrorPanel message={watchError} /> : null}
             </ActionPanel>
 
-            {(canAnalyze || intelligenceResult || isAnalyzing || analyzeError) && (
+            {(canAct || observationResult || isActing || actError) && (
               <ActionPanel
-                eyebrow="Analyze"
-                title="OpenAI recommendation"
-                description="Analyze stays quiet until Observe has already collected the market context."
-                footer={analyzeStatus}
+                eyebrow="Act"
+                title="TinyFish market action"
+                description="Act uses TinyFish to inspect Kalshi and Polymarket and collect the bets."
+                footer={actStatus}
                 action={
                   <button
                     type="button"
-                    onClick={handleAnalyze}
-                    disabled={!canAnalyze || isAnalyzing}
+                    onClick={handleAct}
+                    disabled={!canAct || isActing}
                     className="inline-flex items-center justify-center rounded-full border border-black/12 bg-white px-5 py-3 text-sm font-medium text-[#111111] transition hover:border-black/22 hover:bg-black/2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {isAnalyzing ? "Analyzing..." : "Run Analyze"}
+                    {isActing ? "Acting..." : "Run Act"}
                   </button>
                 }
               >
+                {actError ? <ErrorPanel message={actError} /> : null}
+                {shouldShowObserveAgents ? (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {observeAgents.map((card) => (
+                      <ObserveAgentStreamCard key={card.site} card={card} />
+                    ))}
+                  </div>
+                ) : null}
                 {topObservedBets.length > 0 ? (
                   <details className="rounded-3xl border border-black/8 bg-[#faf7f2] px-4 py-3">
                     <summary className="cursor-pointer list-none text-sm font-medium text-[#111111]">
-                      Observed bets ({totalObservedMarkets})
+                      Acted bets ({totalObservedMarkets})
                     </summary>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {topObservedBets.map((bet) => (
@@ -466,42 +474,43 @@ export function VideoAnalyzerApp() {
                     </div>
                   </details>
                 ) : null}
-                {analyzeError ? <ErrorPanel message={analyzeError} /> : null}
               </ActionPanel>
             )}
 
-            {intelligenceResult ? (
+            {(canThink || intelligenceResult || isThinking || thinkError) ? (
               <ActionPanel
-                eyebrow="Act"
-                title="Kalshi action"
-                description="The execution lane only appears after a recommendation exists."
-                footer={actStatus}
+                eyebrow="Think"
+                title="OpenAI recommendation"
+                description="Think compares the Hume watch context against the TinyFish act output."
+                footer={thinkStatus}
                 action={
                   <button
                     type="button"
-                    onClick={handleAct}
-                    disabled={!intelligenceResult}
+                    onClick={handleThink}
+                    disabled={!canThink || isThinking}
                     className="inline-flex items-center justify-center rounded-full border border-black/12 bg-white px-5 py-3 text-sm font-medium text-[#111111] transition hover:border-black/22 hover:bg-black/2 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Review Act
+                    {isThinking ? "Thinking..." : "Run Think"}
                   </button>
                 }
               >
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <MiniMetric
-                    label="Venue"
-                    value={intelligenceResult.recommendation.betterVenue}
-                  />
-                  <MiniMetric
-                    label="Best bet"
-                    value={intelligenceResult.recommendation.bestBet ?? "No trade"}
-                  />
-                  <MiniMetric
-                    label="Confidence"
-                    value={intelligenceResult.recommendation.confidence}
-                  />
-                </div>
-                {actMessage ? <InlineNote message={actMessage} /> : null}
+                {thinkError ? <ErrorPanel message={thinkError} /> : null}
+                {intelligenceResult ? (
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <MiniMetric
+                      label="Venue"
+                      value={intelligenceResult.recommendation.betterVenue}
+                    />
+                    <MiniMetric
+                      label="Best bet"
+                      value={intelligenceResult.recommendation.bestBet ?? "No trade"}
+                    />
+                    <MiniMetric
+                      label="Confidence"
+                      value={intelligenceResult.recommendation.confidence}
+                    />
+                  </div>
+                ) : null}
               </ActionPanel>
             ) : null}
           </div>
@@ -547,8 +556,8 @@ export function VideoAnalyzerApp() {
             {!humeResult && !observationResult && !intelligenceResult ? (
               <div className="rounded-4xl border border-black/8 bg-white px-5 py-4">
                 <p className="text-sm leading-6 text-black/54">
-                  Run Observe to unlock the Hume summary, live TinyFish agent cards, and
-                  then the OpenAI recommendation.
+                  Run Watch to unlock the Hume summary, then Act for TinyFish, then
+                  Think for the OpenAI recommendation.
                 </p>
               </div>
             ) : null}
@@ -799,23 +808,15 @@ function MiniMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function InlineNote({ message }: { message: string }) {
-  return (
-    <div className="rounded-3xl border border-black/8 bg-[#faf7f2] px-4 py-3 text-sm leading-6 text-black/62">
-      {message}
-    </div>
-  );
-}
-
 function EmptyState({ sample }: { sample: SampleVideo }) {
   return (
     <section className="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="rounded-4xl border border-black/8 bg-white p-6">
         <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Before you run</p>
-        <h2 className="mt-3 text-3xl text-[#111111]">Observe comes first</h2>
+        <h2 className="mt-3 text-3xl text-[#111111]">Watch comes first</h2>
         <p className="mt-4 max-w-2xl text-base leading-7 text-black/58">
-          Start with Observe to collect the Hume and TinyFish context, then run
-          Analyze to decide if the trade is worth taking.
+          Start with Watch to collect the Hume context, then Act with TinyFish, and
+          finally Think to decide if the trade is worth taking.
         </p>
       </div>
 

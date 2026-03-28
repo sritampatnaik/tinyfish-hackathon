@@ -9,7 +9,7 @@ export function RecommendationCard({ result }: RecommendationCardProps) {
 
   return (
     <section className="rounded-4xl border border-black/8 bg-white p-6">
-      <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Brain</p>
+      <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Think</p>
       <div className="mt-3 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-3xl text-[#111111]">OpenAI recommendation</h2>

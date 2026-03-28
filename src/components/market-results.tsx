@@ -99,7 +99,7 @@ export function MarketResults({ result }: MarketResultsProps) {
     <section className="space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Hands</p>
+          <p className="text-xs uppercase tracking-[0.35em] text-[#a66a1f]">Act</p>
           <h2 className="mt-2 text-3xl text-[#111111]">TinyFish markets</h2>
         </div>
         <p className="text-sm text-black/50">{result.observedAt}</p>
